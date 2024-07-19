@@ -4,15 +4,17 @@ import 'dotenv/config';
 
 const io = new Server(5000, {
 	cors: {
-		origin: [process.env.CLIENT_URL],
+		origin: [process.env.CLIENT_URL, process.env.CLIENT_URL_DEV],
 	},
 });
 const redis = new Redis(process.env.REDIS_URL);
 
-const ROULETTE_INTERVAL = 26 * 1000;
-var countdown = Date.now() + ROULETTE_INTERVAL;
+const ROULETTE_INTERVAL = 34 * 1000;
+const availableChoices = [0, 1, 2];
 
-const lastSpins = [];
+var countdown = Date.now();
+
+const lastSpins = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
 const activeBets = [];
 // todo activebets to redis
 // const activeBets = JSON.parse(await redis.get('activeBets')) || [];
@@ -22,26 +24,46 @@ const activeBets = [];
 io.on('connection', (socket) => {
 	console.log(`socket ${socket.id} connected`);
 	socket.emit('rouletteCountdown', countdown);
-	socket.emit('getLastSpins', lastSpins.slice(-10));
+	socket.emit('lastSpins', lastSpins);
+	socket.emit('activeBets', activeBets);
 
-	socket.on('join', (playerEmail, alreadyJoinedCb) => {
-		console.log(`player ${playerEmail} (${socket.id}) joined`);
+	socket.on('makeBet', (newBet) => {
+		if (newBet.playerEmail && newBet.bet && availableChoices.includes(newBet.choice)) {
+			let isActiveBet = false;
 
-		for (let i = 0; i < activeBets.length; i++) {
-			if (activeBets[i].playerEmail === playerEmail) {
-				alreadyJoinedCb();
-				activeBets[i].socket = socket;
-				return;
+			for (let i = 0; i < activeBets.length; i++) {
+				if (activeBets[i].playerEmail === newBet.playerEmail && activeBets[i].choice === newBet.choice) {
+					activeBets[i].bet += newBet.bet;
+					isActiveBet = true;
+					break;
+				}
+			}
+
+			if (!isActiveBet) {
+				activeBets.push(newBet);
+			}
+
+			io.emit('newBet', newBet);
+		}
+	});
+
+	socket.on('clearBet', (betToClear) => {
+		if (betToClear.playerEmail && availableChoices.includes(betToClear.choice)) {
+			for (let i = 0; i < activeBets.length; i++) {
+				if (activeBets[i].playerEmail === betToClear.playerEmail && activeBets[i].choice === betToClear.choice) {
+					io.emit('clearBet', activeBets.splice(i, 1)[0]);
+					break;
+				}
 			}
 		}
 	});
 
-	socket.on('rouletteCountdown', () => {
-		socket.emit('rouletteCountdown', countdown);
+	socket.on('getLastSpins', () => {
+		socket.emit('lastSpins', lastSpins);
 	});
 
-	socket.on('makeBet', async ({ playerEmail, bet, choice }) => {
-		if (playerEmail && bet) activeBets.push({ socket, playerEmail, bet, choice });
+	socket.on('rouletteCountdown', (countdownCb) => {
+		countdownCb((ROULETTE_INTERVAL - (Date.now() - countdown) - 300) / 1000);
 	});
 
 	socket.on('disconnect', (reason) => {
@@ -49,34 +71,52 @@ io.on('connection', (socket) => {
 	});
 });
 
+// todo rouletteResult emitting after bets are closed -> gameState on server
 setInterval(async () => {
-	countdown = Date.now() + ROULETTE_INTERVAL;
-
 	const rouletteResult = Math.floor(Math.random() * 15);
-	lastSpins.push(rouletteResult);
 
-	io.emit('rouletteResult', Number(rouletteResult), ROULETTE_INTERVAL);
+	lastSpins.unshift(rouletteResult);
+	lastSpins.length > 10 && lastSpins.pop();
 
-	if (rouletteResult === 0) calculateResults(activeBets, 0);
-	else if (rouletteResult > 0 && rouletteResult < 8) calculateResults(activeBets, 1);
-	else if (rouletteResult > 7 && rouletteResult < 15) calculateResults(activeBets, 2);
+	io.emit('rouletteResult', rouletteResult);
+	countdown = Date.now();
+
+	const winChoice = calcWinChoice(rouletteResult);
+	await calcResults(activeBets, winChoice);
+
 	activeBets.length = 0;
 }, ROULETTE_INTERVAL);
 
-function calculateResults(bets, winChoice) {
+async function calcResults(bets, winChoice) {
 	for (const bet of bets) {
+		const isZeroBet = bet.choice === 0;
+
 		if (bet.choice === winChoice) {
-			const coeff = bet.choice === 0 ? 15 : 2;
-			bet.socket.emit('won', bet.bet * coeff);
-			fetchGameAPI(bet.playerEmail, bet.bet, true, bet.choice === 0);
+			await fetchGameAPI(bet.playerEmail, bet.bet, true, isZeroBet);
 		} else {
-			fetchGameAPI(bet.playerEmail, bet.bet, false, bet.choice === 0);
+			await fetchGameAPI(bet.playerEmail, bet.bet, false, isZeroBet);
 		}
 	}
 }
 
+function calcWinChoice(rouletteResult) {
+	const possibleGameResults = [
+		[0], // zero
+		[1, 2, 3, 4, 5, 6, 7], // red
+		[8, 9, 10, 11, 12, 13, 14], // black
+	];
+
+	for (const choice of possibleGameResults) {
+		if (choice.includes(rouletteResult)) {
+			return possibleGameResults.indexOf(choice);
+		}
+	}
+
+	return -1;
+}
+
 async function fetchGameAPI(playerEmail, bet, isWon, isZeroBet) {
-	return fetch('http://localhost:3000/api/game/roulette', {
+	return fetch(process.env.SERVER_API_URL + '/api/game/roulette', {
 		method: 'POST',
 		headers: {
 			'Content-Type': 'Application/json',
