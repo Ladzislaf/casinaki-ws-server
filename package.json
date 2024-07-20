@@ -1,22 +1,23 @@
 {
-  "name": "casinaki-ws-server",
-  "version": "1.0.0",
-  "main": "index.js",
-  "type": "module",
-  "scripts": {
-    "dev": "nodemon index.js",
-    "start": "node index.js"
-  },
-  "keywords": [],
-  "author": "ladzislaf@gmail.com",
-  "license": "ISC",
-  "description": "",
-  "devDependencies": {
-    "nodemon": "^3.1.4"
-  },
-  "dependencies": {
-    "dotenv": "^16.4.5",
-    "ioredis": "^5.4.1",
-    "socket.io": "^4.7.5"
-  }
+	"name": "casinaki-ws-server",
+	"version": "1.0.0",
+	"main": "index.js",
+	"scripts": {
+		"build": "tsc",
+		"dev": "nodemon build/index.js",
+		"start": "npm run build && node build/index.js"
+	},
+	"keywords": [],
+	"author": "ladzislaf@gmail.com",
+	"license": "ISC",
+	"description": "",
+	"devDependencies": {
+		"nodemon": "^3.1.4",
+		"typescript": "^5.5.3"
+	},
+	"dependencies": {
+		"dotenv": "^16.4.5",
+		"ioredis": "^5.4.1",
+		"socket.io": "^4.7.5"
+	}
 }

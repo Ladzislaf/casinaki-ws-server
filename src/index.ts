@@ -1,13 +1,15 @@
+import 'dotenv/config';
 import { Redis } from 'ioredis';
 import { Server } from 'socket.io';
-import 'dotenv/config';
+import { ActiveBet } from './types';
+import { calcResults, calcWinChoice, generateRouletteResult } from './utils';
 
 const io = new Server(5000, {
 	cors: {
-		origin: [process.env.CLIENT_URL, process.env.CLIENT_URL_DEV],
+		origin: [process.env.CLIENT_URL as string, process.env.CLIENT_URL_DEV as string],
 	},
 });
-const redis = new Redis(process.env.REDIS_URL);
+const redis = new Redis(process.env.REDIS_URL as string);
 
 const ROULETTE_INTERVAL = 34 * 1000;
 const availableChoices = [0, 1, 2];
@@ -15,11 +17,7 @@ const availableChoices = [0, 1, 2];
 var countdown = Date.now();
 
 const lastSpins = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
-const activeBets = [];
-// todo activebets to redis
-// const activeBets = JSON.parse(await redis.get('activeBets')) || [];
-// activeBets.push({ playerEmail, bet });
-// await redis.set(`activeBets`, JSON.stringify(activeBets));
+const activeBets: ActiveBet[] = [];
 
 io.on('connection', (socket) => {
 	console.log(`socket ${socket.id} connected`);
@@ -27,7 +25,7 @@ io.on('connection', (socket) => {
 	socket.emit('lastSpins', lastSpins);
 	socket.emit('activeBets', activeBets);
 
-	socket.on('makeBet', (newBet) => {
+	socket.on('makeBet', (newBet: ActiveBet) => {
 		if (newBet.playerEmail && newBet.bet && availableChoices.includes(newBet.choice)) {
 			let isActiveBet = false;
 
@@ -73,7 +71,7 @@ io.on('connection', (socket) => {
 
 // todo rouletteResult emitting after bets are closed -> gameState on server
 setInterval(async () => {
-	const rouletteResult = Math.floor(Math.random() * 15);
+	const rouletteResult = generateRouletteResult();
 
 	lastSpins.unshift(rouletteResult);
 	lastSpins.length > 10 && lastSpins.pop();
@@ -87,49 +85,4 @@ setInterval(async () => {
 	activeBets.length = 0;
 }, ROULETTE_INTERVAL);
 
-async function calcResults(bets, winChoice) {
-	for (const bet of bets) {
-		const isZeroBet = bet.choice === 0;
-
-		if (bet.choice === winChoice) {
-			await fetchGameAPI(bet.playerEmail, bet.bet, true, isZeroBet);
-		} else {
-			await fetchGameAPI(bet.playerEmail, bet.bet, false, isZeroBet);
-		}
-	}
-}
-
-function calcWinChoice(rouletteResult) {
-	const possibleGameResults = [
-		[0], // zero
-		[1, 2, 3, 4, 5, 6, 7], // red
-		[8, 9, 10, 11, 12, 13, 14], // black
-	];
-
-	for (const choice of possibleGameResults) {
-		if (choice.includes(rouletteResult)) {
-			return possibleGameResults.indexOf(choice);
-		}
-	}
-
-	return -1;
-}
-
-async function fetchGameAPI(playerEmail, bet, isWon, isZeroBet) {
-	return fetch(process.env.SERVER_API_URL + '/api/game/roulette', {
-		method: 'POST',
-		headers: {
-			'Content-Type': 'Application/json',
-		},
-		body: JSON.stringify({ playerEmail, bet, isWon, isZeroBet }),
-	})
-		.then((res) => {
-			return res.json();
-		})
-		.then((data) => {
-			console.log('Success:', data);
-		})
-		.catch((error) => {
-			console.error('Error:', error);
-		});
-}
+console.log('Server started.');
