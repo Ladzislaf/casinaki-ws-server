@@ -2,9 +2,9 @@ import 'dotenv/config';
 import { Redis } from 'ioredis';
 import { Server } from 'socket.io';
 import { ActiveBet } from './types';
-import { calcResults, calcWinChoice, generateRouletteResult } from './utils';
+import { calcResults, calcWinChoice, generateRouletteResult, initLastSpins } from './utils';
 
-const io = new Server(5000, {
+const io = new Server(Number(process.env.WS_PORT) || 5000, {
 	cors: {
 		origin: [process.env.CLIENT_URL as string, process.env.CLIENT_URL_DEV as string],
 	},
@@ -16,7 +16,7 @@ const availableChoices = [0, 1, 2];
 
 var countdown = Date.now();
 
-const lastSpins = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+const lastSpins = initLastSpins();
 const activeBets: ActiveBet[] = [];
 
 io.on('connection', (socket) => {

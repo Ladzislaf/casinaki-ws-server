@@ -4,6 +4,10 @@ export function generateRouletteResult(): RouletteResult {
 	return Math.floor(Math.random() * 15) as RouletteResult;
 }
 
+export function initLastSpins(): RouletteResult[] {
+	return new Array(10).fill(-1).map(() => Math.floor(Math.random() * 15) as RouletteResult);
+}
+
 export function calcWinChoice(rouletteResult: RouletteResult): WinChoice {
 	const possibleGameResults = [
 		[0], // zero
