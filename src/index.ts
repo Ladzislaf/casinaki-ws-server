@@ -1,7 +1,7 @@
 import 'dotenv/config';
-import { Redis } from 'ioredis';
+// import { Redis } from 'ioredis';
 import { Server } from 'socket.io';
-import { ActiveBet } from './types';
+import type { ActiveBet } from './types';
 import { calcResults, calcWinChoice, generateRouletteResult, initLastSpins } from './utils';
 
 const io = new Server(Number(process.env.WS_PORT) || 5000, {
@@ -9,7 +9,7 @@ const io = new Server(Number(process.env.WS_PORT) || 5000, {
 		origin: [process.env.CLIENT_URL as string, process.env.CLIENT_URL_DEV as string],
 	},
 });
-const redis = new Redis(process.env.REDIS_URL as string);
+// const redis = new Redis(process.env.REDIS_URL as string);
 
 const ROULETTE_INTERVAL = 34 * 1000;
 const availableChoices = [0, 1, 2];
